@@ -47,13 +47,37 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   -t kregistry.siwko.org:5000/fan-control:latest --push .
 
 kubectl apply -f deployment.yaml
+kubectl apply -f external-dns-linode.yaml
 ```
 
-Then browse to `http://<node-ip>:30090` (NodePort) or `http://<node-ip>:8080`
-directly, since the pod is on the host network.
+Then browse to `http://fan.siwko.org:8080`, or `http://<node-ip>:8080`
+directly since the pod is on the host network.
 
-`Jenkinsfile` automates the build/push/deploy above (multi-arch build,
-`kubectl apply` + `set image`, rollout check, and pruning old registry tags),
-same pattern as `kubernetes-openliberty`. It runs on the `docker-builder`
-Jenkins agent, which already has buildx and cluster access configured — no
-credentials to fill in.
+`Jenkinsfile` automates all of the above (multi-arch build, `kubectl apply` +
+`set image`, external-dns reconcile, rollout check, and pruning old registry
+tags), same pattern as `kubernetes-openliberty` / `kubernetes-test-one`. It
+runs on the `docker-builder` Jenkins agent, which already has buildx and
+cluster access configured — no credentials to fill in.
+
+## DNS (fan.siwko.org)
+
+The `fan-control` Service is `type: LoadBalancer` with the annotation
+`external-dns.alpha.kubernetes.io/hostname: fan.siwko.org`. On this cluster,
+MetalLB (see `kubernetes-test-one/metal-lb-config.yml`) hands the Service a
+VIP from its pool, and the `external-dns` controller
+(`external-dns-linode.yaml`) watches for that annotation and publishes the
+VIP as an A record for `fan.siwko.org` in the `siwko.org` Linode zone.
+
+`external-dns-linode.yaml` deploys the shared, cluster-wide external-dns
+controller — it's the same controller already running for the other
+projects on this cluster (same namespace/names), so re-applying it here just
+reconciles the existing Deployment rather than creating a second one. It
+does assume the `linode-api-token` Secret already exists in the
+`external-dns` namespace; if it doesn't yet, create it once:
+
+```bash
+kubectl create namespace external-dns
+kubectl create secret generic linode-api-token \
+  --from-literal=token=<your-linode-api-token> \
+  -n external-dns
+```

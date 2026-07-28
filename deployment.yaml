@@ -71,15 +71,18 @@ kind: Service
 metadata:
   name: fan-control
   namespace: default
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: fan.siwko.org
+    external-dns.alpha.kubernetes.io/ttl: "30"
 spec:
-  # Since the pod uses hostNetwork, it's already reachable at <node-ip>:8080.
-  # This NodePort service just gives you a stable port to hit regardless of
-  # which node the pod currently lands on.
-  type: NodePort
+  # MetalLB hands this a VIP from its pool (see kubernetes-test-one's
+  # metal-lb-config.yml), and external-dns publishes that VIP as fan.siwko.org
+  # in Linode DNS. Works fine even though the backend pod uses hostNetwork --
+  # kube-proxy still routes the VIP to the pod's endpoint.
+  type: LoadBalancer
   selector:
     app: fan-control
   ports:
   - name: http
     port: 8080
     targetPort: 8080
-    nodePort: 30090

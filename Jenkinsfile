@@ -53,6 +53,13 @@ pipeline {
             }
         }
 
+        stage('Deploy External DNS to Kubernetes') {
+            steps {
+                echo "Applying external dns deployment"
+                sh "kubectl apply -f external-dns-linode.yaml"
+            }
+        }
+
         stage('Verify Deployment Status') {
             steps {
                 echo "Verifying rollout status..."
