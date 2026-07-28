@@ -1,0 +1,6 @@
+.git
+deployment.yaml
+Jenkinsfile
+README.md
+__pycache__
+*.pyc

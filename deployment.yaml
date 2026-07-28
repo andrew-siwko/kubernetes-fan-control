@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fan-control
+  namespace: default
+  labels:
+    app: fan-control
+spec:
+  replicas: 1
+  strategy:
+    # hostNetwork pods can't have two replicas bound to the same port on one
+    # node; Recreate avoids a brief overlap during rollout.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: fan-control
+  template:
+    metadata:
+      labels:
+        app: fan-control
+    spec:
+      # The fan only understands broadcasts on its physical LAN
+      # (192.168.50.0/24). Pod networking (CNI overlay) won't reach that
+      # subnet, so the pod must share the node's network namespace instead.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      # If your cluster nodes aren't all on 192.168.50.0/24, pin this pod to
+      # one that is:
+      # nodeSelector:
+      #   kubernetes.io/hostname: your-node-name
+      containers:
+      - name: fan-control
+        image: kregistry.siwko.org:5000/fan-control:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: BROADCAST_IP
+          value: "192.168.50.255"
+        - name: BROADCAST_PORT
+          value: "12345"
+        resources:
+          requests:
+            cpu: 25m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fan-control
+  namespace: default
+spec:
+  # Since the pod uses hostNetwork, it's already reachable at <node-ip>:8080.
+  # This NodePort service just gives you a stable port to hit regardless of
+  # which node the pod currently lands on.
+  type: NodePort
+  selector:
+    app: fan-control
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 30090
