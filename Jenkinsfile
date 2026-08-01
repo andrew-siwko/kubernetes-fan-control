@@ -79,7 +79,7 @@ pipeline {
                 // Requires jq on the agent.
                 sh '''
                     set -e
-                    TAGS_JSON=$(curl -sf "http://${REGISTRY_DOMAIN}/v2/${IMAGE_NAME}/tags/list")
+                    TAGS_JSON=$(curl -sf "https://${REGISTRY_DOMAIN}/v2/${IMAGE_NAME}/tags/list")
                     OLD_TAGS=$(echo "$TAGS_JSON" | jq -r '.tags[]?' | grep -E '^[0-9]+$' | sort -rn | tail -n +$((RETAIN_COUNT + 1)))
 
                     if [ -z "$OLD_TAGS" ]; then
@@ -90,12 +90,12 @@ pipeline {
                         DIGEST=$(curl -sI \
                             -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
                             -H "Accept: application/vnd.oci.image.index.v1+json" \
-                            "http://${REGISTRY_DOMAIN}/v2/${IMAGE_NAME}/manifests/${TAG}" \
+                            "https://${REGISTRY_DOMAIN}/v2/${IMAGE_NAME}/manifests/${TAG}" \
                             | grep -i '^docker-content-digest:' | tr -d '\\r' | awk '{print $2}')
 
                         if [ -n "$DIGEST" ]; then
                             echo "Deleting ${IMAGE_NAME}:${TAG} (${DIGEST})"
-                            curl -sf -X DELETE "http://${REGISTRY_DOMAIN}/v2/${IMAGE_NAME}/manifests/${DIGEST}" || echo "Delete failed for ${TAG}, continuing"
+                            curl -sf -X DELETE "https://${REGISTRY_DOMAIN}/v2/${IMAGE_NAME}/manifests/${DIGEST}" || echo "Delete failed for ${TAG}, continuing"
                         else
                             echo "Could not resolve digest for tag ${TAG}, skipping"
                         fi
