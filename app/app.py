@@ -17,15 +17,30 @@ COMMANDS = {
     "high": {"high": "on"},
     "off": {"off": "off"},
     "light": {"lights": "toggle"},
+    "status": {"status": "true"},
 }
 
 
-def send_udp_broadcast(payload: dict) -> None:
+def send_udp_broadcast(payload: dict):
     message = json.dumps(payload).encode("utf-8")
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind(("", 0))
+        sock.settimeout(1.5)
         sock.sendto(message, (BROADCAST_IP, BROADCAST_PORT))
-    app.logger.info("Sent %s to %s:%s", message, BROADCAST_IP, BROADCAST_PORT)
+        app.logger.info("Sent %s to %s:%s", message, BROADCAST_IP, BROADCAST_PORT)
+
+        try:
+            data, addr = sock.recvfrom(4096)
+            app.logger.info("Received fan status from %s: %s", addr, data)
+            return json.loads(data.decode("utf-8"))
+        except socket.timeout:
+            app.logger.info("No status response received from fan within timeout")
+            return None
+        except json.JSONDecodeError as exc:
+            app.logger.warning("Failed to decode fan status response: %s", exc)
+            return None
 
 
 @app.route("/")
@@ -44,11 +59,11 @@ def command(name):
     if payload is None:
         return jsonify(error=f"unknown command '{name}'"), 400
     try:
-        send_udp_broadcast(payload)
+        response = send_udp_broadcast(payload)
     except OSError as exc:
         app.logger.exception("Failed to send UDP broadcast")
         return jsonify(error=str(exc)), 500
-    return jsonify(status="sent", command=name, payload=payload)
+    return jsonify(status="sent", command=name, payload=payload, fanStatus=response)
 
 
 if __name__ == "__main__":
