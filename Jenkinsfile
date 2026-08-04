@@ -47,7 +47,7 @@ pipeline {
             steps {
                 echo "Applying manifests and updating deployment image..."
                 // Always apply the manifests first so Service changes take effect
-                sh "kubectl apply -f deployment.yaml"
+                sh "kubectl apply -f k8s/deployment.yaml"
                 // Then update the image to the exact build tag
                 sh "kubectl set image deployment/${DEPLOYMENT_NAME} fan-control=${REGISTRY_DOMAIN}/${IMAGE_NAME}:${IMAGE_TAG}"
             }
@@ -56,7 +56,7 @@ pipeline {
         stage('Deploy External DNS to Kubernetes') {
             steps {
                 echo "Applying external dns deployment"
-                sh "kubectl apply -f external-dns-linode.yaml"
+                sh "kubectl apply -f k8s/external-dns-linode.yaml"
             }
         }
 

@@ -25,11 +25,11 @@ was sent — it can't show the fan's actual current state.
 
 `192.168.50.255` is a broadcast address on your physical LAN. Regular pod
 networking (the CNI overlay) generally can't reach it — broadcasts don't
-cross the overlay/NAT boundary. Because of that, `deployment.yaml` sets
+cross the overlay/NAT boundary. Because of that, `k8s/deployment.yaml` sets
 `hostNetwork: true`, so the pod sends the broadcast from the node's own
 network interface. Make sure whichever node the pod lands on is actually
 attached to `192.168.50.0/24` (use the commented-out `nodeSelector` in the
-deployment if your cluster spans multiple network segments).
+k8s/deployment.yaml file if your cluster spans multiple network segments).
 
 ## Local development
 
@@ -46,8 +46,8 @@ python app.py
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t kregistry.siwko.org:5000/fan-control:latest --push .
 
-kubectl apply -f deployment.yaml
-kubectl apply -f external-dns-linode.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/external-dns-linode.yaml
 ```
 
 Then browse to `http://fan.siwko.org:8080`, or `http://<node-ip>:8080`
@@ -65,7 +65,7 @@ The `fan-control` Service is `type: LoadBalancer` with the annotation
 `external-dns.alpha.kubernetes.io/hostname: fan.siwko.org`. On this cluster,
 MetalLB (see `kubernetes-test-one/metal-lb-config.yml`) hands the Service a
 VIP from its pool, and the `external-dns` controller
-(`external-dns-linode.yaml`) watches for that annotation and publishes the
+(`k8s/external-dns-linode.yaml`) watches for that annotation and publishes the
 VIP as an A record for `fan.siwko.org` in the `siwko.org` Linode zone.
 
 `external-dns-linode.yaml` deploys the shared, cluster-wide external-dns

@@ -1,5 +1,6 @@
 .git
-deployment.yaml
+k8s/deployment.yaml
+k8s/external-dns-linode.yaml
 Jenkinsfile
 README.md
 __pycache__
