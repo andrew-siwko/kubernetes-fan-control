@@ -54,6 +54,11 @@ def status_listener():
 
 
 def start_status_listener():
+    worker_id = os.environ.get("GUNICORN_WORKER_ID")
+    if worker_id is not None and worker_id != "1":
+        app.logger.info("Skipping status listener startup in gunicorn worker %s", worker_id)
+        return
+
     listener_thread = threading.Thread(target=status_listener, daemon=True)
     listener_thread.start()
 
@@ -67,20 +72,21 @@ def send_udp_broadcast(payload: dict):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.bind(("", 0))
-        sock.settimeout(1.5)
         sock.sendto(message, (BROADCAST_IP, BROADCAST_PORT))
         app.logger.info("Sent %s to %s:%s", message, BROADCAST_IP, BROADCAST_PORT)
 
-        try:
-            data, addr = sock.recvfrom(4096)
-            app.logger.info("Received fan status from %s: %s", addr, data)
-            return json.loads(data.decode("utf-8"))
-        except socket.timeout:
-            app.logger.info("No status response received from fan within timeout")
-            return None
-        except json.JSONDecodeError as exc:
-            app.logger.warning("Failed to decode fan status response: %s", exc)
-            return None
+
+@app.route("/api/command/<name>", methods=["POST"])
+def command(name):
+    payload = COMMANDS.get(name)
+    if payload is None:
+        return jsonify(error=f"unknown command '{name}'"), 400
+    try:
+        send_udp_broadcast(payload)
+    except OSError as exc:
+        app.logger.exception("Failed to send UDP broadcast")
+        return jsonify(error=str(exc)), 500
+    return jsonify(status="sent", command=name, payload=payload)
 
 
 @app.route("/")
@@ -104,12 +110,14 @@ def status_stream():
     def event_stream():
         last_sent = None
         while True:
-            status_event.wait(timeout=25)
+            status_event.wait(timeout=10)
             with status_lock:
                 current_status = latest_status
             if current_status != last_sent:
                 last_sent = current_status
                 yield f"data: {json.dumps(current_status or {})}\n\n"
+            else:
+                yield ": heartbeat\n\n"
             status_event.clear()
     return Response(event_stream(), mimetype="text/event-stream")
 
