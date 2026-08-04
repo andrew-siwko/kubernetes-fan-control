@@ -2,8 +2,9 @@ import json
 import logging
 import os
 import socket
+import threading
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, Response, jsonify, render_template
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +20,47 @@ COMMANDS = {
     "light": {"lights": "toggle"},
     "status": {"status": "true"},
 }
+
+latest_status = None
+status_lock = threading.Lock()
+status_event = threading.Event()
+
+
+def record_status(status_payload):
+    global latest_status
+    with status_lock:
+        latest_status = status_payload
+    status_event.set()
+
+
+def status_listener():
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind(("", BROADCAST_PORT))
+        app.logger.info("Started fan status listener on port %s", BROADCAST_PORT)
+        while True:
+            try:
+                data, addr = sock.recvfrom(4096)
+                payload = json.loads(data.decode("utf-8"))
+                status_payload = payload.get("current_status") or payload.get("status")
+                if isinstance(status_payload, dict):
+                    record_status(status_payload)
+                    app.logger.info("Received async fan status from %s: %s", addr, status_payload)
+            except json.JSONDecodeError as exc:
+                app.logger.warning("Failed to decode incoming status payload: %s", exc)
+            except Exception as exc:
+                app.logger.debug("Fan status listener error: %s", exc)
+
+
+def start_status_listener():
+    listener_thread = threading.Thread(target=status_listener, daemon=True)
+    listener_thread.start()
+
+
+@app.before_first_request
+def ensure_status_listener():
+    start_status_listener()
 
 
 def send_udp_broadcast(payload: dict):
@@ -51,6 +93,27 @@ def index():
 @app.route("/healthz")
 def healthz():
     return jsonify(status="ok")
+
+
+@app.route("/api/status")
+def status():
+    with status_lock:
+        return jsonify(status=latest_status or {})
+
+
+@app.route("/api/status/stream")
+def status_stream():
+    def event_stream():
+        last_sent = None
+        while True:
+            status_event.wait(timeout=25)
+            with status_lock:
+                current_status = latest_status
+            if current_status != last_sent:
+                last_sent = current_status
+                yield f"data: {json.dumps(current_status or {})}\n\n"
+            status_event.clear()
+    return Response(event_stream(), mimetype="text/event-stream")
 
 
 @app.route("/api/command/<name>", methods=["POST"])
