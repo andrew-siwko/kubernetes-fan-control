@@ -58,9 +58,7 @@ def start_status_listener():
     listener_thread.start()
 
 
-@app.before_first_request
-def ensure_status_listener():
-    start_status_listener()
+start_status_listener()
 
 
 def send_udp_broadcast(payload: dict):
