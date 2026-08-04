@@ -197,13 +197,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'request failed');
 
-        const fanStatus = extractFanStatus(data);
-        if (fanStatus && typeof fanStatus === 'object') {
-          updateStatusUI(fanStatus);
-          showToast(`Sent: ${command}`, false);
-        } else {
-          showToast(`Sent: ${command} (status unavailable)`, false);
-        }
+        showToast(`Sent: ${command}`, false);
       } catch (err) {
         showToast(`Error: ${err.message}`, true);
       } finally {
