@@ -214,13 +214,12 @@
     async function refreshStatus() {
       setButtonsDisabled(true);
       try {
-        const res = await fetch('/api/command/status', { method: 'POST' });
+        const res = await fetch('/api/status');
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'status request failed');
 
-        const fanStatus = extractFanStatus(data);
-        if (fanStatus && typeof fanStatus === 'object') {
-          updateStatusUI(fanStatus);
+        if (data.status && typeof data.status === 'object') {
+          updateStatusUI(data.status);
           showToast('Fan status refreshed', false);
         } else {
           showToast('Fan status unavailable', true);
@@ -232,11 +231,30 @@
       }
     }
 
+    function connectStatusStream() {
+      const eventSource = new EventSource('/api/status/stream');
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload && typeof payload === 'object') {
+            updateStatusUI(payload);
+          }
+        } catch (err) {
+          console.warn('Invalid status event data', err);
+        }
+      };
+      eventSource.onerror = () => {
+        eventSource.close();
+        setTimeout(connectStatusStream, 5000);
+      };
+    }
+
     document.querySelectorAll('button[data-cmd]').forEach((btn) => {
       btn.addEventListener('click', () => sendCommand(btn.dataset.cmd));
     });
 
     refreshStatus();
+    connectStatusStream();
   </script>
 </body>
 </html>
