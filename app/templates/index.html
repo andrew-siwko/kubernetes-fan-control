@@ -186,6 +186,10 @@
       }).join('');
     }
 
+    function extractFanStatus(data) {
+      return data.fanStatus?.current_status ?? data.fanStatus?.status ?? data.current_status ?? data.status;
+    }
+
     async function sendCommand(command) {
       setButtonsDisabled(true);
       try {
@@ -193,7 +197,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'request failed');
 
-        const fanStatus = data.fanStatus?.status ?? data.status;
+        const fanStatus = extractFanStatus(data);
         if (fanStatus && typeof fanStatus === 'object') {
           updateStatusUI(fanStatus);
           showToast(`Sent: ${command}`, false);
@@ -214,7 +218,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'status request failed');
 
-        const fanStatus = data.fanStatus?.status ?? data.status;
+        const fanStatus = extractFanStatus(data);
         if (fanStatus && typeof fanStatus === 'object') {
           updateStatusUI(fanStatus);
           showToast('Fan status refreshed', false);
