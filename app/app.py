@@ -76,19 +76,6 @@ def send_udp_broadcast(payload: dict):
         app.logger.info("Sent %s to %s:%s", message, BROADCAST_IP, BROADCAST_PORT)
 
 
-@app.route("/api/command/<name>", methods=["POST"])
-def command(name):
-    payload = COMMANDS.get(name)
-    if payload is None:
-        return jsonify(error=f"unknown command '{name}'"), 400
-    try:
-        send_udp_broadcast(payload)
-    except OSError as exc:
-        app.logger.exception("Failed to send UDP broadcast")
-        return jsonify(error=str(exc)), 500
-    return jsonify(status="sent", command=name, payload=payload)
-
-
 @app.route("/")
 def index():
     return render_template("index.html")
